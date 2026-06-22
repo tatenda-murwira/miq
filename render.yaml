@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: campaigniq-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    plan: free
+    envVars:
+      - key: CAMPAIGNIQ_CORS_ORIGINS
+        value: https://campaigniq.vercel.app,http://localhost:5173
+      - key: CAMPAIGNIQ_ENV
+        value: production
