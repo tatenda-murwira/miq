@@ -4,7 +4,7 @@ CampaignIQ is a full-stack marketing campaign intelligence platform for answerin
 
 > Which marketing campaigns generated meaningful conversions, which campaigns wasted advertising spend, and which campaign segments should receive more budget?
 
-The project intentionally starts with honest empty states. It does not ship invented campaign results, model metrics, or recommendations.
+The project does not ship invented model metrics or recommendations. The default dataset is the Sales Conversion Optimization Facebook advertising CSV at `backend/data/raw/conversion_data.csv`.
 
 ## Stack
 
@@ -59,6 +59,44 @@ FastAPI documentation is available at:
 http://localhost:8000/docs
 ```
 
+Data endpoints:
+
+```text
+GET  /api/data/status
+POST /api/data/upload
+POST /api/data/use-default
+GET  /api/data/quality
+GET  /api/data/preview
+```
+
+The backend normalizes the public source columns into:
+
+```text
+ad_id, campaign_id, ad_set_id, age, gender, interest, impressions, clicks, spend, leads, purchases
+```
+
+Validated uploads are written to `backend/data/processed/current_dataset.csv`, and the latest data-quality report is written to `backend/reports/data_quality_report.json`.
+
+Analytics endpoints accept the same financial assumptions payload:
+
+```json
+{
+  "average_order_value": 75,
+  "fulfilment_cost_per_purchase": 35,
+  "transaction_cost_per_purchase": 2,
+  "fixed_campaign_operating_cost": 0
+}
+```
+
+```text
+POST /api/analytics/overview
+POST /api/analytics/campaigns
+POST /api/analytics/audiences
+POST /api/analytics/sensitivity
+```
+
+Financial outputs are labelled with `estimated_` fields because they depend on assumptions, not booked accounting profit.
+
 ## Run the Frontend
 
 ```bash
@@ -106,10 +144,13 @@ Services:
 
 CampaignIQ currently includes:
 
-- A FastAPI backend with CORS, environment-based configuration, API docs, and a health endpoint.
+- A FastAPI backend with CORS, environment-based configuration, API docs, health checks, CSV loading, validation, quality reporting, and dataset preview endpoints.
+- A reusable analytics layer for CTR, CPC, conversion rates, cost per lead, CAC, estimated revenue, estimated profit, estimated ROAS, estimated ROMI, audience segments, and sensitivity analysis.
 - A React dashboard shell with sidebar, header, routes, responsive layout, and reusable UI components.
 - A landing page that explains the business problem, marketing funnel, analysis scope, model intent, limitations, and live backend health.
-- Placeholder analytics pages that wait for real data before displaying campaign results.
+- A dashboard data-loading workflow with CSV drag-and-drop, upload progress, validation errors, default-dataset loading, quality summary, and preview table.
+- A global financial-assumptions panel that refreshes Overview, Campaigns, and Audiences analytics when assumptions change.
+- Placeholder analytics pages that wait for model outputs before displaying recommendations or campaign intelligence claims.
 
 ## Planned Data Science Workflow
 
@@ -120,4 +161,3 @@ The backend structure is ready for campaign analysis services that can:
 - Train scikit-learn models to estimate meaningful conversion likelihood.
 - Persist approved model artifacts with Joblib.
 - Generate budget recommendations only when real data and model outputs exist.
-

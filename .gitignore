@@ -10,10 +10,13 @@ venv/
 # Data and model artifacts
 backend/data/raw/*
 backend/data/processed/*
+backend/data/sample/*
 backend/models/*
 backend/reports/*
 !backend/data/raw/.gitkeep
+!backend/data/raw/conversion_data.csv
 !backend/data/processed/.gitkeep
+!backend/data/sample/.gitkeep
 !backend/models/.gitkeep
 !backend/reports/.gitkeep
 
@@ -30,9 +33,14 @@ pnpm-debug.log*
 .env.local
 .env.*.local
 
+# Runtime logs
+*.log
+
+# Vercel
+.vercel
+
 # OS and editor
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/
-
