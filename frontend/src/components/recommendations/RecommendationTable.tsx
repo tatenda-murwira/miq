@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { SegmentRecommendation } from "../../types/recommendation";
+import { formatCampaignName } from "../../utils/format";
 import { RecommendationBadge } from "./RecommendationBadge";
 
 type SortKey = keyof SegmentRecommendation;
@@ -18,6 +19,7 @@ export function RecommendationTable({ segments, search }: Props) {
     if (!search) return true;
     const q = search.toLowerCase();
     return (
+      formatCampaignName(s.campaign_id).toLowerCase().includes(q) ||
       String(s.campaign_id).includes(q) ||
       s.age.toLowerCase().includes(q) ||
       s.gender.toLowerCase().includes(q) ||
@@ -79,7 +81,7 @@ export function RecommendationTable({ segments, search }: Props) {
                 className="cursor-pointer border-b border-stone-100 transition hover:bg-stone-50"
                 onClick={() => setExpandedIdx(expandedIdx === idx ? null : idx)}
               >
-                <td className="px-3 py-2">{seg.campaign_id}</td>
+                <td className="px-3 py-2">{formatCampaignName(seg.campaign_id)}</td>
                 <td className="px-3 py-2">{seg.age}</td>
                 <td className="px-3 py-2">{seg.gender}</td>
                 <td className="px-3 py-2">{seg.interest}</td>

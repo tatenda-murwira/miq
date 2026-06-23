@@ -27,10 +27,12 @@ from app.services.analytics_service import (
 )
 from app.services.features import APPROVED_MODEL_FEATURES
 from app.services.model_service import load_model
+from app.utils.campaign_names import campaign_display_name
 
 
 CAMPAIGN_CSV_HEADERS = [
     "campaign_id",
+    "campaign_name",
     "impressions",
     "clicks",
     "spend",
@@ -48,6 +50,7 @@ CAMPAIGN_CSV_HEADERS = [
 RECOMMENDATIONS_CSV_HEADERS = [
     "ad_id",
     "campaign_id",
+    "campaign_name",
     "age",
     "gender",
     "interest",
@@ -94,6 +97,7 @@ def generate_campaign_summary_csv(
     var_cost = assumptions.fulfilment_cost_per_purchase + assumptions.transaction_cost_per_purchase
 
     rows = []
+    campaign_ids = grouped["campaign_id"].tolist()
     for _, row in grouped.iterrows():
         purchases = float(row["purchases"])
         spend = float(row["spend"])
@@ -104,6 +108,7 @@ def generate_campaign_summary_csv(
 
         rows.append({
             "campaign_id": int(row["campaign_id"]),
+            "campaign_name": campaign_display_name(row["campaign_id"], campaign_ids),
             "impressions": int(impressions),
             "clicks": int(clicks),
             "spend": round(spend, 2),
@@ -143,10 +148,12 @@ def generate_recommendations_csv(
     result = generate_recommendations(request, settings)
 
     rows = []
+    campaign_ids = [segment.campaign_id for segment in result.segments]
     for seg in result.segments:
         rows.append({
             "ad_id": seg.ad_id,
             "campaign_id": seg.campaign_id,
+            "campaign_name": campaign_display_name(seg.campaign_id, campaign_ids),
             "age": seg.age,
             "gender": seg.gender,
             "interest": seg.interest,
@@ -248,10 +255,11 @@ def generate_executive_summary_pdf(
     # Top 5 recommended segments
     _section(pdf, "Top Five Recommended Segments (by Estimated Profit)")
     top_five = sorted(result.segments, key=lambda s: s.estimated_profit, reverse=True)[:5]
+    campaign_ids = [segment.campaign_id for segment in result.segments]
     for i, seg in enumerate(top_five, 1):
         pdf.set_font("Helvetica", "B", 10)
         pdf.cell(0, 6,
-            f"{i}. Campaign {seg.campaign_id} | Age {seg.age} | {seg.gender} | Interest {seg.interest}",
+            f"{i}. {campaign_display_name(seg.campaign_id, campaign_ids)} | Age {seg.age} | {seg.gender} | Interest {seg.interest}",
             new_x="LMARGIN", new_y="NEXT",
         )
         pdf.set_font("Helvetica", "", 9)
@@ -303,13 +311,13 @@ def _generate_findings(result, summary) -> list[str]:
 
     if summary.best_campaign_by_profit:
         findings.append(
-            f"Campaign {summary.best_campaign_by_profit} has the highest estimated profit "
+            f"{campaign_display_name(summary.best_campaign_by_profit, [segment.campaign_id for segment in result.segments])} has the highest estimated profit "
             f"among all campaigns in the current dataset."
         )
 
     if summary.lowest_cac_campaign:
         findings.append(
-            f"Campaign {summary.lowest_cac_campaign} achieves the lowest customer acquisition "
+            f"{campaign_display_name(summary.lowest_cac_campaign, [segment.campaign_id for segment in result.segments])} achieves the lowest customer acquisition "
             f"cost (CAC) among campaigns with at least one purchase."
         )
 

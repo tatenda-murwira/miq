@@ -31,6 +31,7 @@ from app.services.analytics_service import (
 )
 from app.services.features import APPROVED_MODEL_FEATURES, create_binary_target
 from app.services.model_service import load_model
+from app.utils.campaign_names import campaign_display_name
 
 
 # --- Rule configuration ---
@@ -365,7 +366,10 @@ def _build_executive_summary(
     inefficient = full_df[full_df["recommendation"].isin(["Pause", "Reduce budget"])]
     if len(inefficient) > 0:
         ineff_camp = inefficient.groupby("campaign_id")["spend"].sum()
-        largest_ineff = f"Campaign {int(ineff_camp.idxmax())}"
+        largest_ineff = campaign_display_name(
+            int(ineff_camp.idxmax()),
+            full_df["campaign_id"].unique(),
+        )
     else:
         largest_ineff = None
 

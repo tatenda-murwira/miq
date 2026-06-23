@@ -13,12 +13,12 @@ import { useCampaignAnalytics } from "../hooks/useAnalytics";
 import { useFinancialAssumptions } from "../hooks/useFinancialAssumptions";
 import { downloadCampaignSummaryCsv } from "../services/reportApi";
 import type { CampaignAnalyticsRow } from "../types/api";
-import { formatCurrency, formatNumber, formatPercent, formatRatio } from "../utils/format";
+import { formatCampaignName, formatCurrency, formatNumber, formatPercent, formatRatio } from "../utils/format";
 
 type SortDirection = "asc" | "desc";
 
 const columns: DataTableColumn<CampaignAnalyticsRow>[] = [
-  { key: "campaign_id", header: "Campaign", render: (row) => `Campaign ${row.campaign_id}`, sortable: true },
+  { key: "campaign_id", header: "Campaign", render: (row) => formatCampaignName(row.campaign_id), sortable: true },
   { key: "spend", header: "Spend", render: (row) => formatCurrency(row.spend), sortable: true },
   { key: "clicks", header: "Clicks", render: (row) => formatNumber(row.clicks), sortable: true },
   { key: "purchases", header: "Purchases", render: (row) => formatNumber(row.purchases), sortable: true },
@@ -47,7 +47,8 @@ export function CampaignsPage() {
       data?.campaigns.filter((campaign) => {
         const matchesCampaign = campaignFilter ? campaign.campaign_id === campaignFilter : true;
         const matchesSearch = normalizedSearch
-          ? `campaign ${campaign.campaign_id}`.includes(normalizedSearch)
+          ? formatCampaignName(campaign.campaign_id, campaignOptions).toLowerCase().includes(normalizedSearch) ||
+            campaign.campaign_id.toLowerCase().includes(normalizedSearch)
           : true;
         return matchesCampaign && matchesSearch;
       }) ?? [];
@@ -82,7 +83,7 @@ export function CampaignsPage() {
       columns.map((column) => column.header).join(","),
       ...filteredCampaigns.map((row) =>
         [
-          row.campaign_id,
+          formatCampaignName(row.campaign_id, campaignOptions),
           row.spend,
           row.clicks,
           row.purchases,
@@ -102,7 +103,7 @@ export function CampaignsPage() {
   }
 
   const chartRows = filteredCampaigns.map((campaign) => ({
-    campaign: `Campaign ${campaign.campaign_id}`,
+    campaign: formatCampaignName(campaign.campaign_id, campaignOptions),
     cac: campaign.cac ?? 0,
     ctr: campaign.ctr ?? 0,
     estimated_profit: campaign.estimated_profit,
@@ -231,4 +232,3 @@ function getSortValue(row: CampaignAnalyticsRow, key: string): number | string {
   }
   return typeof value === "number" ? value : String(value);
 }
-

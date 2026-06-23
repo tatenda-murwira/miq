@@ -40,6 +40,7 @@ from app.services.model_service import (  # noqa: E402
     train_and_compare,
 )
 from app.services.recommendation_service import generate_recommendations  # noqa: E402
+from app.utils.campaign_names import campaign_display_name  # noqa: E402
 
 
 st.set_page_config(
@@ -207,7 +208,9 @@ def render_overview(settings: Settings, assumptions: FinancialAssumptions) -> No
 
     campaign_df = frame_from_models(overview.campaign_rollup)
     if not campaign_df.empty:
-        campaign_df["campaign"] = "Campaign " + campaign_df["campaign_id"].astype(str)
+        campaign_df["campaign"] = campaign_df["campaign_id"].map(
+            lambda campaign_id: format_campaign_name(campaign_id, campaign_df["campaign_id"])
+        )
 
     left, right = st.columns(2)
     with left:
@@ -248,7 +251,13 @@ def render_campaigns(settings: Settings, assumptions: FinancialAssumptions) -> N
         st.warning("No campaign rows are available.")
         return
 
-    campaign_df["campaign"] = "Campaign " + campaign_df["campaign_id"].astype(str)
+    campaign_df.insert(
+        0,
+        "campaign",
+        campaign_df["campaign_id"].map(
+            lambda campaign_id: format_campaign_name(campaign_id, campaign_df["campaign_id"])
+        ),
+    )
     left, right = st.columns(2)
     with left:
         st.markdown("#### Estimated profit")
@@ -258,13 +267,13 @@ def render_campaigns(settings: Settings, assumptions: FinancialAssumptions) -> N
         st.bar_chart(campaign_df.fillna({"cac": 0}), x="campaign", y="cac", color="#be123c")
 
     st.dataframe(
-        format_table(campaign_df.drop(columns=["campaign"])),
+        format_table(campaign_df),
         hide_index=True,
         use_container_width=True,
     )
     st.download_button(
         "Download campaign summary CSV",
-        campaign_df.drop(columns=["campaign"]).to_csv(index=False),
+        campaign_df.to_csv(index=False),
         file_name="campaigniq_campaign_summary.csv",
         mime="text/csv",
     )
@@ -430,8 +439,8 @@ def render_recommendations(settings: Settings, assumptions: FinancialAssumptions
     summary = response.executive_summary
     metric_row(
         [
-            ("Best campaign", value_or_na(summary.best_campaign_by_profit, prefix="Campaign "), None),
-            ("Lowest CAC campaign", value_or_na(summary.lowest_cac_campaign, prefix="Campaign "), None),
+            ("Best campaign", format_campaign_name(summary.best_campaign_by_profit, dataframe["campaign_id"]), None),
+            ("Lowest CAC campaign", format_campaign_name(summary.lowest_cac_campaign, dataframe["campaign_id"]), None),
             ("Selected segment profit", format_money(summary.estimated_profit_selected), None),
             ("Threshold used", format_percent(response.threshold_used), None),
         ]
@@ -451,6 +460,13 @@ def render_recommendations(settings: Settings, assumptions: FinancialAssumptions
     if segments_df.empty:
         st.info("No segments match the selected filters.")
     else:
+        segments_df.insert(
+            1,
+            "campaign",
+            segments_df["campaign_id"].map(
+                lambda campaign_id: format_campaign_name(campaign_id, dataframe["campaign_id"])
+            ),
+        )
         st.dataframe(format_table(segments_df), hide_index=True, use_container_width=True)
         st.download_button(
             "Download recommendations CSV",
@@ -482,7 +498,7 @@ def build_recommendation_request(
         if not use_auto_threshold:
             threshold = cols[0].slider("Probability threshold", 0.0, 1.0, 0.5, 0.05)
 
-        campaign = select_filter(cols[1], "Campaign ID", dataframe["campaign_id"].astype(str))
+        campaign = select_campaign_filter(cols[1], dataframe["campaign_id"].astype(str))
         age = select_filter(cols[2], "Age", dataframe["age"].astype(str))
         gender = select_filter(cols[3], "Gender", dataframe["gender"].astype(str))
         interest = select_filter(cols[4], "Interest ID", dataframe["interest"].astype(str))
@@ -504,6 +520,16 @@ def select_filter(column, label: str, values: pd.Series) -> str | None:
     options = ["All", *sort_filter_values(values.dropna().unique().tolist())]
     selected = column.selectbox(label, options)
     return None if selected == "All" else str(selected)
+
+
+def select_campaign_filter(column, values: pd.Series) -> str | None:
+    campaign_ids = sort_filter_values(values.dropna().unique().tolist())
+    selected = column.selectbox(
+        "Campaign",
+        ["", *campaign_ids],
+        format_func=lambda value: "All campaigns" if value == "" else format_campaign_name(value, campaign_ids),
+    )
+    return None if selected == "" else str(selected)
 
 
 def sort_filter_values(values: list[str]) -> list[str]:
@@ -619,6 +645,12 @@ def load_metadata(settings: Settings) -> ModelMetadata | None:
 
 def value_or_na(value: str | None, *, prefix: str = "") -> str:
     return f"{prefix}{value}" if value else "N/A"
+
+
+def format_campaign_name(campaign_id, campaign_ids=None) -> str:
+    if campaign_id is None or pd.isna(campaign_id):
+        return "N/A"
+    return campaign_display_name(campaign_id, campaign_ids)
 
 
 def format_number(value) -> str:

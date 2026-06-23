@@ -21,7 +21,7 @@ import { Panel } from "../components/ui/Panel";
 import { StatusBadge } from "../components/ui/StatusBadge";
 import { useOverviewAnalytics, useSensitivityAnalytics } from "../hooks/useAnalytics";
 import { useCampaignData } from "../hooks/useCampaignData";
-import { formatCurrency, formatNumber, formatPercent, formatRatio } from "../utils/format";
+import { formatCampaignName, formatCurrency, formatNumber, formatPercent, formatRatio } from "../utils/format";
 
 export function OverviewPage() {
   const analytics = useOverviewAnalytics();
@@ -41,9 +41,10 @@ export function OverviewPage() {
   } = useCampaignData();
   const activeReport = validationReport ?? quality ?? status?.latest_report ?? null;
   const overview = analytics.data;
+  const campaignIds = overview?.campaign_rollup.map((campaign) => campaign.campaign_id) ?? [];
   const campaignChartData =
     overview?.campaign_rollup.map((campaign) => ({
-      campaign: `Campaign ${campaign.campaign_id}`,
+      campaign: formatCampaignName(campaign.campaign_id, campaignIds),
       cac: campaign.cac ?? 0,
       clicks: campaign.clicks,
       estimated_profit: campaign.estimated_profit,

@@ -18,6 +18,7 @@ from app.schemas.analytics import (
     SensitivityScenario,
 )
 from app.services.data_service import DataValidationError, validate_csv_path
+from app.utils.campaign_names import campaign_display_name
 
 
 GROUP_LIMIT = 20
@@ -276,10 +277,11 @@ def _segment_rows(
     for _, row in grouped.iterrows():
         summary = _summary_from_series(row, assumptions)
         dimension_values = {dimension: str(row[dimension]) for dimension in dimensions}
+        group_value = _segment_group_value(dimension_values, dataframe["campaign_id"].unique())
         rows.append(
             AudienceSegmentRow(
                 group_type=group_type,
-                group_value=" / ".join(dimension_values.values()),
+                group_value=group_value,
                 campaign_id=dimension_values.get("campaign_id"),
                 age=dimension_values.get("age"),
                 gender=dimension_values.get("gender"),
@@ -326,11 +328,11 @@ def _overview_observations(totals: MetricSummary, campaigns: list[CampaignAnalyt
     top_clicks = _max_by(campaigns, "clicks")
     if top_profit:
         observations.append(
-            f"Campaign {top_profit.campaign_id} has the highest estimated profit in the loaded data."
+            f"{_campaign_name(top_profit, campaigns)} has the highest estimated profit in the loaded data."
         )
     if top_clicks and top_profit and top_clicks.campaign_id != top_profit.campaign_id:
         observations.append(
-            f"Campaign {top_clicks.campaign_id} has the most clicks, but campaign {top_profit.campaign_id} has the stronger estimated business value."
+            f"{_campaign_name(top_clicks, campaigns)} has the most clicks, but {_campaign_name(top_profit, campaigns)} has the stronger estimated business value."
         )
     return observations
 
@@ -342,11 +344,11 @@ def _campaign_observations(campaigns: list[CampaignAnalyticsRow]) -> list[str]:
     top_cac = _min_non_null_by(campaigns, "cac")
 
     if top_ctr:
-        observations.append(f"Campaign {top_ctr.campaign_id} has the highest click-through rate.")
+        observations.append(f"{_campaign_name(top_ctr, campaigns)} has the highest click-through rate.")
     if top_profit:
-        observations.append(f"Campaign {top_profit.campaign_id} has the highest estimated profit.")
+        observations.append(f"{_campaign_name(top_profit, campaigns)} has the highest estimated profit.")
     if top_cac:
-        observations.append(f"Campaign {top_cac.campaign_id} has the lowest CAC among campaigns with purchases.")
+        observations.append(f"{_campaign_name(top_cac, campaigns)} has the lowest CAC among campaigns with purchases.")
 
     return observations
 
@@ -401,3 +403,16 @@ def _min_non_null_by(items: Iterable[object], field: str):
 def _money(value: float) -> str:
     return f"${value:,.2f}"
 
+
+def _segment_group_value(dimension_values: dict[str, str], campaign_ids) -> str:
+    parts = []
+    for dimension, value in dimension_values.items():
+        if dimension == "campaign_id":
+            parts.append(campaign_display_name(value, campaign_ids))
+        else:
+            parts.append(value)
+    return " / ".join(parts)
+
+
+def _campaign_name(campaign: CampaignAnalyticsRow, campaigns: list[CampaignAnalyticsRow]) -> str:
+    return campaign_display_name(campaign.campaign_id, [row.campaign_id for row in campaigns])

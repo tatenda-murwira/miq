@@ -12,6 +12,7 @@ import { RecommendationChart } from "../components/recommendations/Recommendatio
 import { RecommendationTable } from "../components/recommendations/RecommendationTable";
 import { RulesPanel } from "../components/recommendations/RulesPanel";
 import { DownloadButton } from "../components/ui/DownloadButton";
+import { formatCampaignName } from "../utils/format";
 
 export function RecommendationsPage() {
   const { assumptions } = useFinancialAssumptions();
@@ -106,8 +107,8 @@ export function RecommendationsPage() {
 
       {/* Executive summary cards */}
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard label="Best campaign (profit)" value={summary.best_campaign_by_profit ? `Campaign ${summary.best_campaign_by_profit}` : "N/A"} />
-        <KpiCard label="Lowest CAC campaign" value={summary.lowest_cac_campaign ? `Campaign ${summary.lowest_cac_campaign}` : "N/A"} />
+        <KpiCard label="Best campaign (profit)" value={formatCampaignName(summary.best_campaign_by_profit, filterOptions.campaigns)} />
+        <KpiCard label="Lowest CAC campaign" value={formatCampaignName(summary.lowest_cac_campaign, filterOptions.campaigns)} />
         <KpiCard label="Best age group" value={summary.best_age_group ?? "N/A"} />
         <KpiCard label="Best interest group" value={summary.best_interest_group ? `Interest ${summary.best_interest_group}` : "N/A"} />
         <KpiCard label="Largest inefficiency" value={summary.largest_inefficient_spend_area ?? "None detected"} />
@@ -137,7 +138,7 @@ export function RecommendationsPage() {
             <span className="text-xs font-semibold uppercase text-graphite">Campaign</span>
             <select className="mt-1 w-full rounded-lg border border-stone-300 bg-stone-50 px-3 py-2 text-sm outline-none focus:border-teal-400" value={filterCampaign} onChange={(e) => setFilterCampaign(e.target.value)}>
               <option value="">All</option>
-              {filterOptions.campaigns.map((c) => <option key={c} value={c}>{c}</option>)}
+              {filterOptions.campaigns.map((c) => <option key={c} value={c}>{formatCampaignName(c, filterOptions.campaigns)}</option>)}
             </select>
           </label>
           <label className="block">

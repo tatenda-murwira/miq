@@ -1,3 +1,5 @@
+import { formatCampaignName } from "../../utils/format";
+
 interface FiltersProps {
   campaignOptions?: string[];
   campaignValue?: string;
@@ -35,7 +37,7 @@ export function Filters({
           <option value="">All campaigns</option>
           {campaignOptions.map((campaignId) => (
             <option key={campaignId} value={campaignId}>
-              Campaign {campaignId}
+              {formatCampaignName(campaignId, campaignOptions)}
             </option>
           ))}
         </select>
@@ -43,4 +45,3 @@ export function Filters({
     </div>
   );
 }
-
