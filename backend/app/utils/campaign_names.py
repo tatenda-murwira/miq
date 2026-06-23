@@ -4,19 +4,19 @@ from collections.abc import Iterable
 from typing import Any
 
 
-CAMPAIGN_NAME_STEMS = [
-    "Campaign Alpha",
-    "Campaign Bravo",
-    "Campaign Charlie",
-    "Campaign Delta",
-    "Campaign Echo",
-    "Campaign Foxtrot",
-    "Campaign Golf",
-    "Campaign Hotel",
-    "Campaign India",
-    "Campaign Juliet",
-    "Campaign Kilo",
-    "Campaign Lima",
+CAMPAIGN_NAME_LABELS = [
+    "Campaign One",
+    "Campaign Two",
+    "Campaign Three",
+    "Campaign Four",
+    "Campaign Five",
+    "Campaign Six",
+    "Campaign Seven",
+    "Campaign Eight",
+    "Campaign Nine",
+    "Campaign Ten",
+    "Campaign Eleven",
+    "Campaign Twelve",
 ]
 
 DEFAULT_CAMPAIGN_ORDER = ["916", "936", "1178"]
@@ -32,7 +32,7 @@ def campaign_display_name(campaign_id: Any, campaign_ids: Iterable[Any] | None =
     else:
         index = _fallback_index(normalized_id)
 
-    return f"{CAMPAIGN_NAME_STEMS[index % len(CAMPAIGN_NAME_STEMS)]} {normalized_id}"
+    return f"{CAMPAIGN_NAME_LABELS[index % len(CAMPAIGN_NAME_LABELS)]} ({normalized_id})"
 
 
 def _ordered_campaign_ids(campaign_ids: Iterable[Any]) -> list[str]:

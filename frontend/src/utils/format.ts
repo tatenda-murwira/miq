@@ -34,19 +34,19 @@ export function formatRatio(value: number | null | undefined): string {
   return `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}x`;
 }
 
-const campaignNameStems = [
-  "Campaign Alpha",
-  "Campaign Bravo",
-  "Campaign Charlie",
-  "Campaign Delta",
-  "Campaign Echo",
-  "Campaign Foxtrot",
-  "Campaign Golf",
-  "Campaign Hotel",
-  "Campaign India",
-  "Campaign Juliet",
-  "Campaign Kilo",
-  "Campaign Lima",
+const campaignNameLabels = [
+  "Campaign One",
+  "Campaign Two",
+  "Campaign Three",
+  "Campaign Four",
+  "Campaign Five",
+  "Campaign Six",
+  "Campaign Seven",
+  "Campaign Eight",
+  "Campaign Nine",
+  "Campaign Ten",
+  "Campaign Eleven",
+  "Campaign Twelve",
 ];
 
 const defaultCampaignOrder = ["916", "936", "1178"];
@@ -65,7 +65,7 @@ export function formatCampaignName(
     ? orderedIds.indexOf(normalizedId)
     : fallbackCampaignIndex(normalizedId);
 
-  return `${campaignNameStems[index % campaignNameStems.length]} ${normalizedId}`;
+  return `${campaignNameLabels[index % campaignNameLabels.length]} (${normalizedId})`;
 }
 
 function orderCampaignIds(campaignIds: Array<number | string>): string[] {
