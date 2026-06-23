@@ -38,8 +38,10 @@ Backend:
 
 ## Run the Streamlit App
 
-The Streamlit app is the simplest deployment target for CampaignIQ. It reuses the existing
-backend analytics, validation, model-training, and recommendation services directly.
+The Streamlit app is the simplest deployment target for CampaignIQ. It runs as one app:
+Streamlit provides the UI and directly reuses the existing Python analytics, validation,
+model-training, and recommendation services. It does not start the React frontend or the
+FastAPI server on Streamlit Community Cloud.
 
 ```bash
 python -m venv .venv
@@ -61,12 +63,23 @@ runtime directory so the app works cleanly on Streamlit Community Cloud.
 Push this repository to GitHub, then create a Streamlit Community Cloud app with:
 
 ```text
-Repository: <your GitHub CampaignIQ repository>
+Repository: tatenda-murwira/miq
 Branch: main
 Main file path: streamlit_app.py
 ```
 
 The root `requirements.txt` contains the Python packages Streamlit Cloud needs to install.
+
+## Deployment Options
+
+Use one of these paths depending on where the app is running:
+
+- Streamlit Community Cloud: runs `streamlit_app.py` as a single combined app.
+- Local full-stack mode: runs the FastAPI backend and React frontend as separate services.
+- Docker Compose: runs the local FastAPI and React services together.
+
+For the FastAPI backend, install from `backend/requirements.txt`. For Streamlit Cloud,
+install from the root `requirements.txt`.
 
 ## Run the Backend
 
@@ -183,13 +196,14 @@ Services:
 
 CampaignIQ currently includes:
 
+- A Streamlit app that combines upload, validation, analytics, model training, recommendations, filters, and CSV downloads in a single deployable interface.
 - A FastAPI backend with CORS, environment-based configuration, API docs, health checks, CSV loading, validation, quality reporting, and dataset preview endpoints.
 - A reusable analytics layer for CTR, CPC, conversion rates, cost per lead, CAC, estimated revenue, estimated profit, estimated ROAS, estimated ROMI, audience segments, and sensitivity analysis.
 - A React dashboard shell with sidebar, header, routes, responsive layout, and reusable UI components.
 - A landing page that explains the business problem, marketing funnel, analysis scope, model intent, limitations, and live backend health.
-- A dashboard data-loading workflow with CSV drag-and-drop, upload progress, validation errors, default-dataset loading, quality summary, and preview table.
+- A dashboard data-loading workflow with CSV uploads, validation errors, default-dataset loading, quality summary, and preview table.
 - A global financial-assumptions panel that refreshes Overview, Campaigns, and Audiences analytics when assumptions change.
-- Placeholder analytics pages that wait for model outputs before displaying recommendations or campaign intelligence claims.
+- Model training, model metrics, feature importance, budget recommendations, recommendation filters, and downloadable CSV outputs.
 
 ## Planned Data Science Workflow
 

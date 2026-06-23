@@ -205,6 +205,10 @@ def render_overview(settings: Settings, assumptions: FinancialAssumptions) -> No
     st.markdown("#### Observations")
     render_observations(overview.observations)
 
+    campaign_df = frame_from_models(overview.campaign_rollup)
+    if not campaign_df.empty:
+        campaign_df["campaign"] = "Campaign " + campaign_df["campaign_id"].astype(str)
+
     left, right = st.columns(2)
     with left:
         st.markdown("#### Funnel")
@@ -212,15 +216,18 @@ def render_overview(settings: Settings, assumptions: FinancialAssumptions) -> No
         st.bar_chart(funnel_df, x="stage", y="value", color="#0f766e")
     with right:
         st.markdown("#### Spend vs estimated profit")
-        campaign_df = frame_from_models(overview.campaign_rollup)
         if not campaign_df.empty:
-            campaign_df["campaign"] = "Campaign " + campaign_df["campaign_id"].astype(str)
             st.bar_chart(campaign_df, x="campaign", y=["spend", "estimated_profit"])
+        else:
+            st.info("No campaign rows are available.")
 
     left, right = st.columns(2)
     with left:
         st.markdown("#### Purchases by campaign")
-        st.bar_chart(campaign_df, x="campaign", y="purchases", color="#0f766e")
+        if not campaign_df.empty:
+            st.bar_chart(campaign_df, x="campaign", y="purchases", color="#0f766e")
+        else:
+            st.info("No campaign rows are available.")
     with right:
         st.markdown("#### Estimated profit sensitivity")
         sensitivity_df = frame_from_models(sensitivity.scenarios)
@@ -275,10 +282,10 @@ def render_audiences(settings: Settings, assumptions: FinancialAssumptions) -> N
     groups = {
         "Age": response.by_age,
         "Gender": response.by_gender,
-        "Interest": response.by_interest,
-        "Campaign and age": response.by_campaign_age,
-        "Campaign and gender": response.by_campaign_gender,
-        "High spend, low conversion": response.high_spend_low_conversion_segments,
+        "Interest ID": response.by_interest,
+        "Campaign by age": response.by_campaign_age,
+        "Campaign by gender": response.by_campaign_gender,
+        "High spend with low conversion": response.high_spend_low_conversion_segments,
     }
     selected = st.selectbox("Audience view", list(groups.keys()))
     segment_df = frame_from_models(groups[selected])
@@ -425,7 +432,7 @@ def render_recommendations(settings: Settings, assumptions: FinancialAssumptions
         [
             ("Best campaign", value_or_na(summary.best_campaign_by_profit, prefix="Campaign "), None),
             ("Lowest CAC campaign", value_or_na(summary.lowest_cac_campaign, prefix="Campaign "), None),
-            ("Estimated profit selected", format_money(summary.estimated_profit_selected), None),
+            ("Selected segment profit", format_money(summary.estimated_profit_selected), None),
             ("Threshold used", format_percent(response.threshold_used), None),
         ]
     )
@@ -475,10 +482,10 @@ def build_recommendation_request(
         if not use_auto_threshold:
             threshold = cols[0].slider("Probability threshold", 0.0, 1.0, 0.5, 0.05)
 
-        campaign = select_filter(cols[1], "Campaign", dataframe["campaign_id"].astype(str))
+        campaign = select_filter(cols[1], "Campaign ID", dataframe["campaign_id"].astype(str))
         age = select_filter(cols[2], "Age", dataframe["age"].astype(str))
         gender = select_filter(cols[3], "Gender", dataframe["gender"].astype(str))
-        interest = select_filter(cols[4], "Interest", dataframe["interest"].astype(str))
+        interest = select_filter(cols[4], "Interest ID", dataframe["interest"].astype(str))
 
     return RecommendationRequest(
         average_order_value=assumptions.average_order_value,
@@ -494,9 +501,16 @@ def build_recommendation_request(
 
 
 def select_filter(column, label: str, values: pd.Series) -> str | None:
-    options = ["All", *sorted(values.dropna().unique().tolist())]
+    options = ["All", *sort_filter_values(values.dropna().unique().tolist())]
     selected = column.selectbox(label, options)
     return None if selected == "All" else str(selected)
+
+
+def sort_filter_values(values: list[str]) -> list[str]:
+    try:
+        return sorted(values, key=lambda value: int(value))
+    except ValueError:
+        return sorted(values)
 
 
 def render_data(settings: Settings) -> None:
@@ -507,9 +521,9 @@ def render_data(settings: Settings) -> None:
         metric_row(
             [
                 ("Default dataset", "Valid" if status.default_dataset_valid else "Missing/invalid", None),
-                ("Working dataset", "Valid" if status.current_dataset_valid else "Missing/invalid", None),
-                ("Warnings", str(len(status.warnings)), None),
-                ("Runtime files", str(settings.current_dataset_path.parent), None),
+                ("Active dataset", "Valid" if status.current_dataset_valid else "Missing/invalid", None),
+                ("Validation messages", str(len(status.warnings)), None),
+                ("Storage mode", "Temporary session", None),
             ]
         )
     except DataValidationError as exc:
@@ -557,7 +571,7 @@ def render_observations(observations: list[str]) -> None:
 def metric_row(items: list[tuple[str, str, str | None]]) -> None:
     cols = st.columns(len(items))
     for col, (label, value, helper) in zip(cols, items):
-        col.metric(label, value, delta=helper)
+        col.metric(label, value, delta=helper, delta_color="off")
 
 
 def frame_from_models(rows) -> pd.DataFrame:
