@@ -2,6 +2,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  LabelList,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -21,6 +22,7 @@ import { Panel } from "../components/ui/Panel";
 import { StatusBadge } from "../components/ui/StatusBadge";
 import { useOverviewAnalytics, useSensitivityAnalytics } from "../hooks/useAnalytics";
 import { useCampaignData } from "../hooks/useCampaignData";
+import type { FunnelStage } from "../types/api";
 import { formatCampaignName, formatCurrency, formatNumber, formatPercent, formatRatio } from "../utils/format";
 
 export function OverviewPage() {
@@ -42,6 +44,7 @@ export function OverviewPage() {
   const activeReport = validationReport ?? quality ?? status?.latest_report ?? null;
   const overview = analytics.data;
   const campaignIds = overview?.campaign_rollup.map((campaign) => campaign.campaign_id) ?? [];
+  const funnelConversionData = overview ? buildFunnelConversionData(overview.funnel) : [];
   const campaignChartData =
     overview?.campaign_rollup.map((campaign) => ({
       campaign: formatCampaignName(campaign.campaign_id, campaignIds),
@@ -81,17 +84,7 @@ export function OverviewPage() {
           </Panel>
 
           <section className="grid gap-6 xl:grid-cols-2">
-            <ChartContainer title="Marketing funnel">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={overview.funnel}>
-                  <CartesianGrid stroke="#e7e5e4" strokeDasharray="4 4" vertical={false} />
-                  <XAxis dataKey="stage" tickLine={false} axisLine={false} />
-                  <YAxis tickLine={false} axisLine={false} />
-                  <Tooltip formatter={(value) => formatNumber(Number(value))} />
-                  <Bar dataKey="value" fill="#0f766e" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartContainer>
+            <FunnelConversionCard conversions={funnelConversionData} stages={overview.funnel} />
 
             <ChartContainer title="Spend versus estimated profit by campaign">
               <ResponsiveContainer width="100%" height="100%">
@@ -230,6 +223,86 @@ export function OverviewPage() {
       </Panel>
     </div>
   );
+}
+
+interface FunnelConversionRow {
+  conversionRate: number;
+  conversionRatePercent: number;
+  fromCount: number;
+  toCount: number;
+  transition: string;
+}
+
+function FunnelConversionCard({
+  conversions,
+  stages,
+}: {
+  conversions: FunnelConversionRow[];
+  stages: FunnelStage[];
+}) {
+  return (
+    <div className="rounded-lg border border-stone-200 bg-white p-4">
+      <h4 className="text-sm font-semibold text-ink">Funnel conversion rates</h4>
+      <p className="mt-2 text-xs leading-5 text-graphite">
+        The chart shows the percentage moving from one funnel stage to the next, so impressions
+        no longer hide smaller stages.
+      </p>
+      <div className="mt-4 h-56">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={conversions} layout="vertical" margin={{ left: 24, right: 72 }}>
+            <CartesianGrid stroke="#e7e5e4" strokeDasharray="4 4" horizontal={false} />
+            <XAxis
+              axisLine={false}
+              domain={[0, 100]}
+              tickFormatter={(value) => `${value}%`}
+              tickLine={false}
+              type="number"
+            />
+            <YAxis
+              axisLine={false}
+              dataKey="transition"
+              tickLine={false}
+              type="category"
+              width={140}
+            />
+            <Tooltip
+              formatter={(value) => [formatPercent(Number(value) / 100), "Conversion rate"]}
+            />
+            <Bar dataKey="conversionRatePercent" fill="#0f766e" radius={[0, 6, 6, 0]}>
+              <LabelList
+                dataKey="conversionRate"
+                formatter={(value: unknown) => formatPercent(Number(value))}
+                position="right"
+              />
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+        {stages.map((stage) => (
+          <div key={stage.stage} className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2">
+            <p className="text-xs font-semibold uppercase text-graphite">{stage.stage}</p>
+            <p className="mt-1 text-sm font-semibold text-ink">{formatNumber(stage.value)}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function buildFunnelConversionData(stages: FunnelStage[]): FunnelConversionRow[] {
+  return stages.slice(1).map((stage, index) => {
+    const previous = stages[index];
+    const conversionRate = previous.value === 0 ? 0 : stage.value / previous.value;
+
+    return {
+      conversionRate,
+      conversionRatePercent: conversionRate * 100,
+      fromCount: previous.value,
+      toCount: stage.value,
+      transition: `${previous.stage} to ${stage.stage}`,
+    };
+  });
 }
 
 interface StatusRowProps {

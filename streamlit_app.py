@@ -214,9 +214,21 @@ def render_overview(settings: Settings, assumptions: FinancialAssumptions) -> No
 
     left, right = st.columns(2)
     with left:
-        st.markdown("#### Funnel")
         funnel_df = pd.DataFrame([stage.model_dump() for stage in overview.funnel])
-        st.bar_chart(funnel_df, x="stage", y="value", color="#0f766e")
+        conversion_df = build_funnel_conversion_dataframe(funnel_df)
+        st.markdown("#### Funnel conversion rates")
+        st.caption("This shows the percentage moving from one funnel stage to the next.")
+        st.bar_chart(conversion_df, x="transition", y="conversion_rate_percent", color="#0f766e")
+        st.dataframe(
+            pd.DataFrame(
+                {
+                    "Stage": funnel_df["stage"],
+                    "Raw count": funnel_df["value"].map(format_number),
+                }
+            ),
+            hide_index=True,
+            use_container_width=True,
+        )
     with right:
         st.markdown("#### Spend vs estimated profit")
         if not campaign_df.empty:
@@ -537,6 +549,27 @@ def sort_filter_values(values: list[str]) -> list[str]:
         return sorted(values, key=lambda value: int(value))
     except ValueError:
         return sorted(values)
+
+
+def build_funnel_conversion_dataframe(funnel_df: pd.DataFrame) -> pd.DataFrame:
+    rows = []
+    for index in range(1, len(funnel_df)):
+        previous = funnel_df.iloc[index - 1]
+        current = funnel_df.iloc[index]
+        previous_value = float(previous["value"])
+        current_value = float(current["value"])
+        conversion_rate = 0 if previous_value == 0 else current_value / previous_value
+        rows.append(
+            {
+                "transition": f"{previous['stage']} to {current['stage']}",
+                "from_count": previous_value,
+                "to_count": current_value,
+                "conversion_rate": conversion_rate,
+                "conversion_rate_percent": conversion_rate * 100,
+            }
+        )
+
+    return pd.DataFrame(rows)
 
 
 def render_data(settings: Settings) -> None:
