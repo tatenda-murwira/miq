@@ -8,6 +8,13 @@ The project does not ship invented model metrics or recommendations. The default
 
 ## Stack
 
+Streamlit app:
+
+- Streamlit
+- Pandas
+- scikit-learn
+- Pydantic
+
 Frontend:
 
 - React
@@ -28,6 +35,38 @@ Backend:
 - Joblib
 - Pydantic
 - pytest
+
+## Run the Streamlit App
+
+The Streamlit app is the simplest deployment target for CampaignIQ. It reuses the existing
+backend analytics, validation, model-training, and recommendation services directly.
+
+```bash
+python -m venv .venv
+pip install -r requirements.txt
+streamlit run streamlit_app.py
+```
+
+Streamlit loads the default dataset from:
+
+```text
+backend/data/raw/conversion_data.csv
+```
+
+Uploaded datasets, trained models, and validation reports are written to a temporary
+runtime directory so the app works cleanly on Streamlit Community Cloud.
+
+## Deploy on Streamlit Community Cloud
+
+Push this repository to GitHub, then create a Streamlit Community Cloud app with:
+
+```text
+Repository: <your GitHub CampaignIQ repository>
+Branch: main
+Main file path: streamlit_app.py
+```
+
+The root `requirements.txt` contains the Python packages Streamlit Cloud needs to install.
 
 ## Run the Backend
 
