@@ -1,47 +1,153 @@
 # CampaignIQ
 
-CampaignIQ is a full-stack marketing campaign intelligence platform for answering:
+CampaignIQ is a marketing campaign intelligence system for understanding which
+advertising campaigns create business value, which segments waste spend, and
+where budget should be increased, reduced, monitored, or paused.
 
-> Which marketing campaigns generated meaningful conversions, which campaigns wasted advertising spend, and which campaign segments should receive more budget?
+The project is built around one core idea:
 
-The project does not ship invented model metrics or recommendations. The default dataset is the Sales Conversion Optimization Facebook advertising CSV at `backend/data/raw/conversion_data.csv`.
+> High engagement does not automatically mean high business value.
 
-## Stack
+Clicks and impressions are useful, but they do not prove profitability. CampaignIQ
+connects campaign activity to leads, purchases, estimated revenue, estimated
+profit, customer acquisition cost, ROAS, ROMI, and model-backed budget
+recommendations.
 
-Streamlit app:
+## Business Questions
 
-- Streamlit
-- Pandas
-- scikit-learn
-- Pydantic
+CampaignIQ helps answer:
 
-Frontend:
+- Which campaigns generated meaningful conversions?
+- Which campaigns created the highest estimated profit?
+- Which campaigns produced clicks but weak business value?
+- Which audience groups convert best by age, gender, and interest?
+- Which campaign segments have high spend and low conversion?
+- Which segments should receive more budget?
+- Which segments should continue, be monitored, be reduced, or be paused?
+- How do average order value and cost assumptions affect profitability?
+- Are campaign decisions based on real data quality checks and explainable rules?
 
-- React
-- TypeScript
-- Vite
-- Tailwind CSS
-- React Router
-- Axios
-- Recharts
+## Campaign Labels
 
-Backend:
+The source dataset contains campaign IDs, not human-written campaign names.
+CampaignIQ keeps those source IDs for accuracy and adds readable display names:
 
-- Python
-- FastAPI
-- Pandas
-- NumPy
-- scikit-learn
-- Joblib
-- Pydantic
-- pytest
+| Source campaign ID | Display name |
+| --- | --- |
+| `916` | Campaign One (916) |
+| `936` | Campaign Two (936) |
+| `1178` | Campaign Three (1178) |
 
-## Run the Streamlit App
+These names appear in dashboards, observations, reports, and exports. The
+underlying `campaign_id` values are still preserved.
 
-The Streamlit app is the simplest deployment target for CampaignIQ. It runs as one app:
-Streamlit provides the UI and directly reuses the existing Python analytics, validation,
-model-training, and recommendation services. It does not start the React frontend or the
-FastAPI server on Streamlit Community Cloud.
+## System Workflow
+
+1. **Load campaign data**
+
+   The app starts with the default CSV at:
+
+   ```text
+   backend/data/raw/conversion_data.csv
+   ```
+
+   Users can also upload a new campaign CSV.
+
+2. **Validate and normalize data**
+
+   The system checks for missing columns, empty files, invalid numeric values,
+   negative values, duplicate rows, clicks greater than impressions, and
+   purchases greater than leads.
+
+   Raw source columns are normalized into:
+
+   ```text
+   ad_id, campaign_id, ad_set_id, age, gender, interest,
+   impressions, clicks, spend, leads, purchases
+   ```
+
+3. **Set financial assumptions**
+
+   Users provide:
+
+   - Average order value
+   - Fulfilment cost per purchase
+   - Transaction cost per purchase
+   - Fixed campaign operating cost
+
+   Estimated financial metrics depend on these assumptions.
+
+4. **Analyze campaign performance**
+
+   CampaignIQ calculates:
+
+   - Impressions
+   - Clicks
+   - CTR
+   - CPC
+   - Leads
+   - Purchases
+   - Purchase conversion rate
+   - Cost per lead
+   - CAC
+   - Estimated revenue
+   - Estimated profit
+   - Estimated ROAS
+   - Estimated ROMI
+
+5. **Analyze audience segments**
+
+   The app breaks performance down by:
+
+   - Age
+   - Gender
+   - Interest ID
+   - Campaign by age
+   - Campaign by gender
+
+6. **Train a conversion model**
+
+   The backend trains and compares models such as Logistic Regression and
+   Random Forest. The prediction target is whether an active advertising segment
+   generated at least one approved purchase.
+
+   Model selection prioritizes average precision because conversion data can be
+   imbalanced.
+
+7. **Generate recommendations**
+
+   Each segment receives one of these recommendations:
+
+   - Increase budget carefully
+   - Continue
+   - Monitor
+   - Reduce budget
+   - Pause
+
+   Recommendations use conversion probability, estimated profit, spend, CAC,
+   purchase conversion rate, and dataset medians.
+
+8. **Export results**
+
+   CampaignIQ supports CSV downloads for campaign summaries and recommendations.
+   Backend reports also support executive summary PDF generation.
+
+## Streamlit App
+
+The Streamlit app is the simplest deployment target. It runs as one combined app:
+Streamlit provides the UI and directly reuses the Python analytics, validation,
+model-training, and recommendation services.
+
+Streamlit Community Cloud does not start the React frontend or the FastAPI
+server. It runs:
+
+```text
+streamlit_app.py
+```
+
+### Run Streamlit Locally
+
+From the project root:
 
 ```bash
 python -m venv .venv
@@ -49,18 +155,11 @@ pip install -r requirements.txt
 streamlit run streamlit_app.py
 ```
 
-Streamlit loads the default dataset from:
-
-```text
-backend/data/raw/conversion_data.csv
-```
-
-Uploaded datasets, trained models, and validation reports are written to a temporary
-runtime directory so the app works cleanly on Streamlit Community Cloud.
+Root `requirements.txt` is for Streamlit deployment.
 
 ## Deploy on Streamlit Community Cloud
 
-Push this repository to GitHub, then create a Streamlit Community Cloud app with:
+Create a Streamlit Community Cloud app with:
 
 ```text
 Repository: tatenda-murwira/miq
@@ -68,20 +167,14 @@ Branch: main
 Main file path: streamlit_app.py
 ```
 
-The root `requirements.txt` contains the Python packages Streamlit Cloud needs to install.
+Streamlit will install dependencies from the root `requirements.txt`.
 
-## Deployment Options
+## Local Full-Stack Mode
 
-Use one of these paths depending on where the app is running:
+The original FastAPI backend and React frontend can still run locally as
+separate services.
 
-- Streamlit Community Cloud: runs `streamlit_app.py` as a single combined app.
-- Local full-stack mode: runs the FastAPI backend and React frontend as separate services.
-- Docker Compose: runs the local FastAPI and React services together.
-
-For the FastAPI backend, install from `backend/requirements.txt`. For Streamlit Cloud,
-install from the root `requirements.txt`.
-
-## Run the Backend
+### Backend
 
 ```bash
 cd backend
@@ -90,66 +183,25 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-The API health endpoint is available at:
+Backend URL:
 
 ```text
-GET http://localhost:8000/api/health
+http://localhost:8000
 ```
 
-Expected response:
-
-```json
-{
-  "status": "healthy",
-  "service": "CampaignIQ API"
-}
-```
-
-FastAPI documentation is available at:
+API docs:
 
 ```text
 http://localhost:8000/docs
 ```
 
-Data endpoints:
+Health check:
 
 ```text
-GET  /api/data/status
-POST /api/data/upload
-POST /api/data/use-default
-GET  /api/data/quality
-GET  /api/data/preview
+GET http://localhost:8000/api/health
 ```
 
-The backend normalizes the public source columns into:
-
-```text
-ad_id, campaign_id, ad_set_id, age, gender, interest, impressions, clicks, spend, leads, purchases
-```
-
-Validated uploads are written to `backend/data/processed/current_dataset.csv`, and the latest data-quality report is written to `backend/reports/data_quality_report.json`.
-
-Analytics endpoints accept the same financial assumptions payload:
-
-```json
-{
-  "average_order_value": 75,
-  "fulfilment_cost_per_purchase": 35,
-  "transaction_cost_per_purchase": 2,
-  "fixed_campaign_operating_cost": 0
-}
-```
-
-```text
-POST /api/analytics/overview
-POST /api/analytics/campaigns
-POST /api/analytics/audiences
-POST /api/analytics/sensitivity
-```
-
-Financial outputs are labelled with `estimated_` fields because they depend on assumptions, not booked accounting profit.
-
-## Run the Frontend
+### Frontend
 
 ```bash
 cd frontend
@@ -157,27 +209,22 @@ npm install
 npm run dev
 ```
 
-The frontend expects the backend at `http://localhost:8000/api` by default.
+Frontend URL:
+
+```text
+http://localhost:5173
+```
+
+The frontend expects the backend API at:
+
+```text
+http://localhost:8000/api
+```
+
 Override it with:
 
 ```bash
 VITE_API_BASE_URL=http://localhost:8000/api
-```
-
-## Run Tests and Build
-
-Backend:
-
-```bash
-cd backend
-pytest
-```
-
-Frontend:
-
-```bash
-cd frontend
-npm run build
 ```
 
 ## Docker Compose
@@ -192,25 +239,67 @@ Services:
 - Backend: `http://localhost:8000`
 - API docs: `http://localhost:8000/docs`
 
-## Current Scope
+## Testing
 
-CampaignIQ currently includes:
+Backend:
 
-- A Streamlit app that combines upload, validation, analytics, model training, recommendations, filters, and CSV downloads in a single deployable interface.
-- A FastAPI backend with CORS, environment-based configuration, API docs, health checks, CSV loading, validation, quality reporting, and dataset preview endpoints.
-- A reusable analytics layer for CTR, CPC, conversion rates, cost per lead, CAC, estimated revenue, estimated profit, estimated ROAS, estimated ROMI, audience segments, and sensitivity analysis.
-- A React dashboard shell with sidebar, header, routes, responsive layout, and reusable UI components.
-- A landing page that explains the business problem, marketing funnel, analysis scope, model intent, limitations, and live backend health.
-- A dashboard data-loading workflow with CSV uploads, validation errors, default-dataset loading, quality summary, and preview table.
-- A global financial-assumptions panel that refreshes Overview, Campaigns, and Audiences analytics when assumptions change.
-- Model training, model metrics, feature importance, budget recommendations, recommendation filters, and downloadable CSV outputs.
+```bash
+cd backend
+pytest
+```
 
-## Planned Data Science Workflow
+Frontend:
 
-The backend structure is ready for campaign analysis services that can:
+```bash
+cd frontend
+npm test -- --run
+npm run build
+```
 
-- Validate raw campaign and conversion data.
-- Transform campaign, audience, spend, and conversion fields with Pandas and NumPy.
-- Train scikit-learn models to estimate meaningful conversion likelihood.
-- Persist approved model artifacts with Joblib.
-- Generate budget recommendations only when real data and model outputs exist.
+Streamlit smoke check:
+
+```bash
+streamlit run streamlit_app.py
+```
+
+## Project Structure
+
+```text
+campaigniq/
+  streamlit_app.py              # Streamlit deployment app
+  requirements.txt              # Streamlit Cloud dependencies
+  backend/
+    app/
+      routers/                  # FastAPI routes
+      schemas/                  # Pydantic models
+      services/                 # Analytics, validation, ML, recommendations
+      utils/                    # Shared helpers such as campaign display names
+    data/raw/conversion_data.csv
+    requirements.txt            # FastAPI backend dependencies
+    tests/
+  frontend/
+    src/
+      pages/
+      components/
+      hooks/
+      services/
+      utils/
+```
+
+## Important Notes
+
+- Financial values are estimates, not booked accounting profit.
+- Recommendation outputs are decision support, not guaranteed outcomes.
+- The model uses available campaign and segment data; it does not invent metrics.
+- Uploaded datasets and trained artifacts in Streamlit run in temporary session
+  storage, which is appropriate for Streamlit Community Cloud.
+- The raw campaign IDs are preserved even when readable display names are shown.
+
+## Presentation Summary
+
+CampaignIQ turns raw advertising campaign data into business-focused marketing
+decisions. It validates the data, calculates campaign and audience performance,
+estimates profitability from user-provided assumptions, trains a conversion model,
+and generates explainable budget recommendations. The system helps marketers
+avoid relying only on clicks and impressions by showing which campaigns and
+segments are most likely to create real business value.
