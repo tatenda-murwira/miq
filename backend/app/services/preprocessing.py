@@ -2,11 +2,6 @@ from dataclasses import dataclass
 from math import ceil
 
 import pandas as pd
-from sklearn.compose import ColumnTransformer
-from sklearn.impute import SimpleImputer
-from sklearn.model_selection import train_test_split
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from app.schemas.model import ClassDistribution, FeatureEngineeringMetadata
 from app.services.features import (
@@ -43,18 +38,23 @@ class ModelSplit:
 class PreparedModelData:
     feature_table: ModelFeatureTable
     split: ModelSplit
-    preprocessing_pipeline: Pipeline
+    preprocessing_pipeline: object
     metadata: FeatureEngineeringMetadata
 
 
-def build_column_transformer() -> ColumnTransformer:
-    numeric_pipeline = Pipeline(
+def build_column_transformer():
+    from sklearn.compose import ColumnTransformer
+    from sklearn.impute import SimpleImputer
+    from sklearn.pipeline import Pipeline as SkPipeline
+    from sklearn.preprocessing import OneHotEncoder, StandardScaler
+
+    numeric_pipeline = SkPipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="median")),
             ("scaler", StandardScaler()),
         ]
     )
-    categorical_pipeline = Pipeline(
+    categorical_pipeline = SkPipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="most_frequent")),
             ("encoder", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
@@ -70,8 +70,9 @@ def build_column_transformer() -> ColumnTransformer:
     )
 
 
-def build_preprocessing_pipeline() -> Pipeline:
-    return Pipeline(steps=[("preprocessor", build_column_transformer())])
+def build_preprocessing_pipeline():
+    from sklearn.pipeline import Pipeline as SkPipeline
+    return SkPipeline(steps=[("preprocessor", build_column_transformer())])
 
 
 def create_train_test_split(
@@ -81,20 +82,16 @@ def create_train_test_split(
     random_state: int = RANDOM_STATE,
     test_size: float = TEST_SIZE,
 ) -> ModelSplit:
+    from sklearn.model_selection import train_test_split
+
     stratify = target if _can_stratify(target, test_size=test_size) else None
     x_train, x_test, y_train, y_test = train_test_split(
-        features,
-        target,
-        test_size=test_size,
-        random_state=random_state,
-        stratify=stratify,
+        features, target,
+        test_size=test_size, random_state=random_state, stratify=stratify,
     )
 
     return ModelSplit(
-        x_train=x_train,
-        x_test=x_test,
-        y_train=y_train,
-        y_test=y_test,
+        x_train=x_train, x_test=x_test, y_train=y_train, y_test=y_test,
         class_distribution=ClassDistribution(
             total=_class_counts(target),
             train=_class_counts(y_train),
@@ -126,10 +123,8 @@ def prepare_model_data(dataframe: pd.DataFrame) -> PreparedModelData:
     )
 
     return PreparedModelData(
-        feature_table=feature_table,
-        split=split,
-        preprocessing_pipeline=preprocessing_pipeline,
-        metadata=metadata,
+        feature_table=feature_table, split=split,
+        preprocessing_pipeline=preprocessing_pipeline, metadata=metadata,
     )
 
 
@@ -137,15 +132,12 @@ def _can_stratify(target: pd.Series, *, test_size: float) -> bool:
     counts = target.value_counts()
     if len(counts) < 2 or counts.min() < 2:
         return False
-
     test_count = ceil(len(target) * test_size)
     train_count = len(target) - test_count
     class_count = len(counts)
-
     return test_count >= class_count and train_count >= class_count
 
 
 def _class_counts(target: pd.Series) -> dict[int, int]:
     counts = target.value_counts().sort_index()
     return {int(label): int(count) for label, count in counts.items()}
-

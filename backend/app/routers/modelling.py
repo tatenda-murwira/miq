@@ -22,11 +22,9 @@ from app.services.features import (
     FeatureLeakageError,
     FeatureTableError,
     create_binary_target,
+    create_model_feature_table,
 )
 from app.services.model_service import load_model, train_and_compare
-from app.services.preprocessing import create_train_test_split, RANDOM_STATE, TEST_SIZE
-from app.services.features import create_model_feature_table
-from app.services.threshold_service import run_threshold_analysis
 
 router = APIRouter(prefix="/model", tags=["model"])
 
@@ -130,6 +128,9 @@ def threshold_analysis(
 ) -> ThresholdAnalysisResponse:
     if not settings.model_artifact_path.exists():
         raise HTTPException(status_code=404, detail="No model has been trained yet.")
+
+    from app.services.preprocessing import create_train_test_split
+    from app.services.threshold_service import run_threshold_analysis
 
     dataframe = _load_current_dataset(settings)
     pipeline = load_model(settings.model_artifact_path)

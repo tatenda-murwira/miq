@@ -17,23 +17,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List
 
-import joblib
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import (
-    accuracy_score,
-    average_precision_score,
-    confusion_matrix,
-    f1_score,
-    precision_recall_curve,
-    precision_score,
-    recall_score,
-    roc_auc_score,
-    roc_curve,
-)
-from sklearn.pipeline import Pipeline
 
 from app.config import get_settings
 from app.schemas.model import (
@@ -52,40 +37,84 @@ from app.services.features import (
     PROHIBITED_LEAKAGE_FEATURES,
     SPLIT_LIMITATION_NOTE,
 )
-from app.services.preprocessing import (
-    RANDOM_STATE,
-    build_preprocessing_pipeline,
-    create_train_test_split,
-    prepare_model_data,
-)
+
+# Lazy imports for sklearn/joblib to allow the app to boot on serverless without them
+_sklearn_available = None
 
 
-_MODEL_DEFINITIONS = {
-    "LogisticRegression": lambda: LogisticRegression(
-        class_weight="balanced",
-        random_state=RANDOM_STATE,
-        max_iter=1000,
-    ),
-    "RandomForest": lambda: RandomForestClassifier(
-        class_weight="balanced",
-        random_state=RANDOM_STATE,
-        n_estimators=100,
-    ),
-}
+def _check_sklearn():
+    global _sklearn_available
+    if _sklearn_available is None:
+        try:
+            import sklearn  # noqa: F401
+            import joblib  # noqa: F401
+            _sklearn_available = True
+        except ImportError:
+            _sklearn_available = False
+    return _sklearn_available
 
 
-def train_and_compare(dataframe: pd.DataFrame, *, settings: "Settings | None" = None) -> TrainingResult:
+def _require_sklearn():
+    if not _check_sklearn():
+        raise RuntimeError(
+            "Model training and prediction require scikit-learn and joblib. "
+            "These are not available in the serverless deployment. "
+            "Use the local or Docker deployment to train models."
+        )
+
+
+def _get_model_definitions() -> dict:
+    _require_sklearn()
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.linear_model import LogisticRegression
+    from app.services.preprocessing import RANDOM_STATE
+    return {
+        "LogisticRegression": lambda: LogisticRegression(
+            class_weight="balanced", random_state=RANDOM_STATE, max_iter=1000,
+        ),
+        "RandomForest": lambda: RandomForestClassifier(
+            class_weight="balanced", random_state=RANDOM_STATE, n_estimators=100,
+        ),
+    }
+
+
+# Backwards-compatible access for tests
+class _LazyModelDefinitions:
+    def items(self):
+        return _get_model_definitions().items()
+
+    def __getitem__(self, key):
+        return _get_model_definitions()[key]
+
+    def __contains__(self, key):
+        return key in _get_model_definitions()
+
+
+_MODEL_DEFINITIONS = _LazyModelDefinitions()
+
+
+def train_and_compare(dataframe: pd.DataFrame, *, settings=None) -> TrainingResult:
     """Train all models, evaluate, select best, persist artifacts."""
+    _require_sklearn()
+
+    from app.services.preprocessing import (
+        RANDOM_STATE,
+        build_preprocessing_pipeline,
+        prepare_model_data,
+    )
+
     if settings is None:
         settings = get_settings()
+
+    model_definitions = _get_model_definitions()
 
     prepared = prepare_model_data(dataframe)
     split = prepared.split
 
     results: List[ModelResult] = []
-    trained_pipelines: dict[str, Pipeline] = {}
+    trained_pipelines: dict = {}
 
-    for name, make_estimator in _MODEL_DEFINITIONS.items():
+    for name, make_estimator in model_definitions.items():
         pipeline = build_preprocessing_pipeline()
         pipeline.steps.append(("classifier", make_estimator()))
         pipeline.fit(split.x_train, split.y_train)
@@ -99,19 +128,13 @@ def train_and_compare(dataframe: pd.DataFrame, *, settings: "Settings | None" = 
         pr_points = _compute_pr_curve(split.y_test, y_proba)
 
         results.append(ModelResult(
-            model_name=name,
-            metrics=metrics,
-            feature_importances=importances,
-            roc_curve=roc_points,
-            precision_recall_curve=pr_points,
+            model_name=name, metrics=metrics, feature_importances=importances,
+            roc_curve=roc_points, precision_recall_curve=pr_points,
         ))
         trained_pipelines[name] = pipeline
 
-    # Sort by selection priority: average_precision > f1_score > roc_auc
     results.sort(key=lambda r: (
-        r.metrics.average_precision,
-        r.metrics.f1_score,
-        r.metrics.roc_auc,
+        r.metrics.average_precision, r.metrics.f1_score, r.metrics.roc_auc,
     ), reverse=True)
 
     selected = results[0]
@@ -129,24 +152,20 @@ def train_and_compare(dataframe: pd.DataFrame, *, settings: "Settings | None" = 
         class_distribution=split.class_distribution,
         evaluation_metrics=selected.metrics,
         random_state=RANDOM_STATE,
-        dataset_limitations=[
-            MODEL_SCOPE_NOTE,
-            SPLIT_LIMITATION_NOTE,
-        ],
+        dataset_limitations=[MODEL_SCOPE_NOTE, SPLIT_LIMITATION_NOTE],
     )
 
-    # Persist
     save_model(selected_pipeline, settings.model_artifact_path)
     save_metadata(metadata, settings.model_metadata_path)
 
     return TrainingResult(
-        selected_model=selected.model_name,
-        leaderboard=results,
-        metadata=metadata,
+        selected_model=selected.model_name, leaderboard=results, metadata=metadata,
     )
 
 
-def save_model(pipeline: Pipeline, path: Path) -> None:
+def save_model(pipeline, path: Path) -> None:
+    _require_sklearn()
+    import joblib
     path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(pipeline, path)
 
@@ -156,11 +175,17 @@ def save_metadata(metadata: ModelMetadata, path: Path) -> None:
     path.write_text(json.dumps(metadata.model_dump(), indent=2), encoding="utf-8")
 
 
-def load_model(path: Path) -> Pipeline:
+def load_model(path: Path):
+    _require_sklearn()
+    import joblib
     return joblib.load(path)
 
 
 def _compute_metrics(y_true: pd.Series, y_pred: np.ndarray, y_proba: np.ndarray) -> EvaluationMetrics:
+    from sklearn.metrics import (
+        accuracy_score, average_precision_score, confusion_matrix,
+        f1_score, precision_score, recall_score, roc_auc_score,
+    )
     tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[0, 1]).ravel()
     return EvaluationMetrics(
         accuracy=float(accuracy_score(y_true, y_pred)),
@@ -170,25 +195,25 @@ def _compute_metrics(y_true: pd.Series, y_pred: np.ndarray, y_proba: np.ndarray)
         roc_auc=float(roc_auc_score(y_true, y_proba)),
         average_precision=float(average_precision_score(y_true, y_proba)),
         confusion_matrix=ConfusionMatrixValues(
-            true_negatives=int(tn),
-            false_positives=int(fp),
-            false_negatives=int(fn),
-            true_positives=int(tp),
+            true_negatives=int(tn), false_positives=int(fp),
+            false_negatives=int(fn), true_positives=int(tp),
         ),
     )
 
 
 def _compute_roc_curve(y_true: pd.Series, y_proba: np.ndarray) -> List[CurvePoint]:
+    from sklearn.metrics import roc_curve
     fpr, tpr, _ = roc_curve(y_true, y_proba)
     return [CurvePoint(x=float(x), y=float(y)) for x, y in zip(fpr, tpr)]
 
 
 def _compute_pr_curve(y_true: pd.Series, y_proba: np.ndarray) -> List[CurvePoint]:
+    from sklearn.metrics import precision_recall_curve
     precision, recall, _ = precision_recall_curve(y_true, y_proba)
     return [CurvePoint(x=float(r), y=float(p)) for r, p in zip(recall, precision)]
 
 
-def _extract_feature_importances(pipeline: Pipeline, model_name: str) -> List[FeatureImportance]:
+def _extract_feature_importances(pipeline, model_name: str) -> List[FeatureImportance]:
     feature_names = _get_transformed_feature_names(pipeline)
     classifier = pipeline.named_steps["classifier"]
 
@@ -204,19 +229,17 @@ def _extract_feature_importances(pipeline: Pipeline, model_name: str) -> List[Fe
         importances.sort(key=lambda x: x.importance, reverse=True)
         return importances
 
-    # RandomForest
     raw_importances = classifier.feature_importances_
     importances = []
     for name, imp in zip(feature_names, raw_importances):
         importances.append(FeatureImportance(
-            feature=_simplify_feature_name(name),
-            importance=float(imp),
+            feature=_simplify_feature_name(name), importance=float(imp),
         ))
     importances.sort(key=lambda x: x.importance, reverse=True)
     return importances
 
 
-def _get_transformed_feature_names(pipeline: Pipeline) -> List[str]:
+def _get_transformed_feature_names(pipeline) -> List[str]:
     preprocessor = pipeline.named_steps["preprocessor"]
     try:
         return list(preprocessor.get_feature_names_out())
@@ -225,7 +248,6 @@ def _get_transformed_feature_names(pipeline: Pipeline) -> List[str]:
 
 
 def _simplify_feature_name(name: str) -> str:
-    """Convert sklearn transformed names like 'categorical__gender_M' to readable form."""
     for prefix in ("numeric__", "categorical__"):
         if name.startswith(prefix):
             return name[len(prefix):]
